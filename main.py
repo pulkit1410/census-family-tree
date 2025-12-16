@@ -43,7 +43,7 @@ from PySide6.QtWidgets import QApplication
 from config import APP_VERSION
 from database.db_manager import DatabaseManager
 from gui.main_window import MainWindow
-from utils.sample_data import create_sample_data
+# from utils.sample_data import create_sample_data
 
 
 def check_dependencies():
@@ -74,9 +74,9 @@ def main():
     db_manager = DatabaseManager()
     
     # Create sample data if needed
-    session = db_manager.get_session()
+    # session = db_manager.get_session()
     # create_sample_data(session)
-    session.close()
+    # session.close()
     
     print()
     print("Starting application...")

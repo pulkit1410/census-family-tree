@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEd
 from PySide6.QtCore import Qt, QDate
 from models.person import Person
 from models.relationship import Relationship
-from business.validator import Validator
+# from business.validator import Validator
 from database.db_manager import DatabaseManager
 from datetime import date
 from sqlalchemy.orm import Session
@@ -128,21 +128,21 @@ class RelationshipFormDialog(QDialog):
         rel_type = self.relation_type.currentText()
         
         # Validate
-        valid, msg = Validator.validate_relationship(self.session, person_a_id, person_b_id, rel_type)
+        # valid, msg = Validator.validate_relationship(self.session, person_a_id, person_b_id, rel_type)
         
-        if not valid:
-            # For age warnings, show confirmation dialog
-            if "12 years" in msg:
-                reply = QMessageBox.question(
-                    self, "Age Warning",
-                    f"{msg}\n\nDo you want to proceed anyway?",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                if reply == QMessageBox.No:
-                    return
-            else:
-                QMessageBox.warning(self, "Validation Error", msg)
-                return
+        # if not valid:
+        #     # For age warnings, show confirmation dialog
+        #     if "12 years" in msg:
+        #         reply = QMessageBox.question(
+        #             self, "Age Warning",
+        #             f"{msg}\n\nDo you want to proceed anyway?",
+        #             QMessageBox.Yes | QMessageBox.No
+        #         )
+        #         if reply == QMessageBox.No:
+        #             return
+        #     else:
+        #         QMessageBox.warning(self, "Validation Error", msg)
+        #         return
         
         # Get dates
         start = None

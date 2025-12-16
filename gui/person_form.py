@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDateEdit, QFormLayout, QComboBox, QTextEdit, QCheckBox, QDialogButtonBox, QMessageBox
 from PySide6.QtCore import Qt, QDate
 from models.person import Person
-from business.validator import Validator
+# from business.validator import Validator
 from database.db_manager import DatabaseManager
 from datetime import date, datetime
 from sqlalchemy.orm import Session
@@ -109,10 +109,10 @@ class PersonFormDialog(QDialog):
         """Validate and accept form."""
         name = self.name_input.text().strip()
         
-        valid, msg = Validator.validate_person_data(name)
-        if not valid:
-            QMessageBox.warning(self, "Validation Error", msg)
-            return
+        # valid, msg = Validator.validate_person_data(name)
+        # if not valid:
+        #     QMessageBox.warning(self, "Validation Error", msg)
+        #     return
         
         # Parse external IDs
         ext_ids = {}

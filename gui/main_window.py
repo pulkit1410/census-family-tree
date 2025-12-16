@@ -14,7 +14,7 @@ from database.db_manager import DatabaseManager
 from visualization.tree_renderer import FamilyTreeView
 from gui.person_form import PersonFormDialog
 from gui.relationship_form import RelationshipFormDialog
-from gui.duplicate_dialog import DuplicateDetectionDialog
+# from gui.duplicate_dialog import DuplicateDetectionDialog
 from business.import_export import ImportExport
 
 
@@ -201,6 +201,11 @@ class MainWindow(QMainWindow):
     
     def refresh_person_list(self, search_term: str = ""):
         """Refresh the person list."""
+        # Store current selection
+        selected_id = None
+        if self.current_person:
+            selected_id = self.current_person.id
+
         self.person_list.clear()
         
         if search_term:
@@ -213,6 +218,14 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(f"{person.full_name} (ID: {person.id}, DOB: {dob_str})")
             item.setData(Qt.UserRole, person.id)
             self.person_list.addItem(item)
+            # Restore selection if possible
+            if selected_id is not None and person.id == selected_id:
+                self.person_list.setCurrentItem(item)
+                self.current_person = person  # Ensure current_person is up-to-date
+
+        # If no selection, clear current_person
+        if self.person_list.currentItem() is None:
+            self.current_person = None
     
     def filter_persons(self):
         """Filter persons based on search."""
@@ -387,8 +400,8 @@ class MainWindow(QMainWindow):
     
     def find_duplicates(self):
         """Open duplicate detection dialog."""
-        dialog = DuplicateDetectionDialog(self, session=self.session)
-        dialog.exec()
+        # dialog = DuplicateDetectionDialog(self, session=self.session)
+        # dialog.exec()
         self.refresh_person_list()
     
     def export_data(self):
