@@ -1,0 +1,7 @@
+modules = ["python-3.12", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["freefont_ttf", "freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "rapidfuzz-cpp", "taskflow", "tcl", "tk", "xdg-utils", "zlib"]
