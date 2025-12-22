@@ -1,5 +1,5 @@
 """
-Graph layout algorithm for family trees.
+Graph layout algorithm for family trees with improved spacing and collision detection.
 """
 from typing import Dict, List, Set, Tuple, Optional
 from collections import defaultdict, deque
@@ -10,7 +10,7 @@ from models.relationship import Relationship
 
 
 class TreeLayoutEngine:
-    """Calculate positions for family tree nodes using hierarchical layout."""
+    """Calculate positions for family tree nodes using hierarchical layout with collision avoidance."""
     
     def __init__(self):
         self.node_width = TREE_CONFIG['node_width']
@@ -22,7 +22,7 @@ class TreeLayoutEngine:
     def calculate_layout(self, persons: List[Person], relationships: List[Relationship],
                         center_person_id: Optional[int] = None) -> Dict[int, Tuple[float, float]]:
         """
-        Calculate positions for all persons in the tree.
+        Calculate positions for all persons in the tree with proper spacing.
         Returns dict mapping person_id -> (x, y) position.
         """
         if not persons:
@@ -45,7 +45,14 @@ class TreeLayoutEngine:
         for person_id, level in levels.items():
             level_groups[level].append(person_id)
         
-        # Calculate positions
+        # Calculate positions with improved spacing
+        positions = self._calculate_positions_with_spacing(level_groups, graph, levels)
+        
+        return positions
+    
+    def _calculate_positions_with_spacing(self, level_groups: Dict, 
+                                         graph: Dict, levels: Dict) -> Dict[int, Tuple[float, float]]:
+        """Calculate positions ensuring proper spacing and family grouping."""
         positions = {}
         
         for level in sorted(level_groups.keys()):
@@ -54,19 +61,59 @@ class TreeLayoutEngine:
             # Calculate y position for this level
             y = level * (self.node_height + self.level_spacing)
             
-            # Calculate x positions to center the level
-            num_persons = len(person_ids)
-            total_width = num_persons * self.node_width + (num_persons - 1) * self.h_spacing
+            # Group by families (spouses and their children stay together)
+            family_groups = self._group_families(person_ids, graph, levels)
+            
+            # Calculate total width needed
+            total_width = self._calculate_level_width(family_groups, graph)
             start_x = -total_width / 2
             
-            for i, person_id in enumerate(person_ids):
-                x = start_x + i * (self.node_width + self.h_spacing)
-                positions[person_id] = (x, y)
-        
-        # Adjust positions to group families together
-        positions = self._adjust_for_families(positions, graph, levels)
+            current_x = start_x
+            
+            for family_group in family_groups:
+                # Position all persons in this family group
+                group_width = len(family_group) * (self.node_width + self.h_spacing) - self.h_spacing
+                
+                for i, person_id in enumerate(family_group):
+                    x = current_x + i * (self.node_width + self.h_spacing)
+                    positions[person_id] = (x, y)
+                
+                current_x += group_width + self.h_spacing * 2
         
         return positions
+    
+    def _group_families(self, person_ids: List[int], graph: Dict, levels: Dict) -> List[List[int]]:
+        """Group persons by family units (spouses together)."""
+        families = []
+        processed = set()
+        
+        for person_id in person_ids:
+            if person_id in processed:
+                continue
+            
+            # Find spouse if exists
+            spouses = [person_id]
+            for spouse_id in graph[person_id]['spouses']:
+                if spouse_id in person_ids and levels[spouse_id] == levels[person_id]:
+                    spouses.append(spouse_id)
+                    processed.add(spouse_id)
+            
+            # Sort spouses for consistent positioning
+            spouses.sort()
+            families.append(spouses)
+            processed.add(person_id)
+        
+        return families
+    
+    def _calculate_level_width(self, family_groups: List[List[int]], graph: Dict) -> float:
+        """Calculate total width needed for a level."""
+        total_width = 0
+        for i, family in enumerate(family_groups):
+            family_width = len(family) * (self.node_width + self.h_spacing) - self.h_spacing
+            total_width += family_width
+            if i < len(family_groups) - 1:
+                total_width += self.h_spacing * 2  # Gap between families
+        return total_width
     
     def _build_graph(self, relationships: List[Relationship]) -> Dict[int, Dict[str, Set[int]]]:
         """
@@ -120,44 +167,3 @@ class TreeLayoutEngine:
                     visited.add(spouse_id)
         
         return levels
-    
-    def _adjust_for_families(self, positions: Dict[int, Tuple[float, float]], 
-                            graph: Dict, levels: Dict[int, int]) -> Dict[int, Tuple[float, float]]:
-        """
-        Adjust positions to keep spouse pairs close together.
-        """
-        adjusted = positions.copy()
-        
-        # Group spouses and center them
-        processed = set()
-        
-        for person_id in positions:
-            if person_id in processed:
-                continue
-            
-            # Find all spouses at the same level
-            spouses = [person_id]
-            for spouse_id in graph[person_id]['spouses']:
-                if levels.get(spouse_id) == levels.get(person_id):
-                    spouses.append(spouse_id)
-                    processed.add(spouse_id)
-            
-            processed.add(person_id)
-            
-            # If there are spouses, adjust their positions to be adjacent
-            if len(spouses) > 1:
-                # Sort by current x position
-                spouses.sort(key=lambda pid: positions[pid][0])
-                
-                # Calculate center position
-                avg_x = sum(positions[pid][0] for pid in spouses) / len(spouses)
-                y = positions[spouses[0]][1]
-                
-                # Reposition to be adjacent
-                start_x = avg_x - (len(spouses) - 1) * (self.node_width + self.h_spacing // 2) / 2
-                
-                for i, spouse_id in enumerate(spouses):
-                    x = start_x + i * (self.node_width + self.h_spacing // 2)
-                    adjusted[spouse_id] = (x, y)
-        
-        return adjusted

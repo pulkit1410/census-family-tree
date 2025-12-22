@@ -1,7 +1,30 @@
-modules = ["python-3.12", "web"]
+modules = ["web", "python-3.11"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
 packages = ["freefont_ttf", "freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "rapidfuzz-cpp", "taskflow", "tcl", "tk", "xdg-utils", "zlib"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Family Tree Desktop App"
+
+[[workflows.workflow]]
+name = "Family Tree Desktop App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[workflows.workflow.metadata]
+outputType = "vnc"

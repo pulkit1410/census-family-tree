@@ -8,11 +8,11 @@ DATABASE_ECHO = False
 
 # Visualization settings
 TREE_CONFIG = {
-    'node_width': 150,
-    'node_height': 80,
-    'horizontal_spacing': 40,
-    'vertical_spacing': 100,
-    'level_spacing': 120,
+    'node_width': 160,
+    'node_height': 95,
+    'horizontal_spacing': 100,
+    'vertical_spacing': 30,
+    'level_spacing': 200,
     
     # Colors
     'male_color': '#ADD8E6',  # Light blue
@@ -25,7 +25,7 @@ TREE_CONFIG = {
     'border_width': 2,
     'border_color': '#333333',
     'font_family': 'Arial',
-    'font_size': 10,
+    'font_size': 9,
     
     # Relationship lines
     'parent_line_color': '#666666',

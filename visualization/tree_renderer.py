@@ -23,7 +23,7 @@ class PersonNode(QGraphicsRectItem):
         
         self.person = person
         self.is_highlight = is_highlight
-        self.text_items = []  # Store text items for debugging
+        self.text_items = []
         
         # Position
         self.setPos(x, y)
@@ -36,12 +36,11 @@ class PersonNode(QGraphicsRectItem):
         # Styling
         self.setup_appearance()
         
-        # Add text - MUST be called after the item is positioned
+        # Add text
         self.add_labels()
         
     def setup_appearance(self):
         """Setup node appearance based on person data."""
-        # Determine color based on gender
         if self.is_highlight:
             color = QColor(TREE_CONFIG['highlight_color'])
         elif self.person.gender == 'Male':
@@ -51,70 +50,55 @@ class PersonNode(QGraphicsRectItem):
         else:
             color = QColor(TREE_CONFIG['unknown_color'])
         
-        # Set brush and pen
         self.setBrush(QBrush(color))
         pen = QPen(QColor(TREE_CONFIG['border_color']), TREE_CONFIG['border_width'])
         self.setPen(pen)
     
     def add_labels(self):
-        """Add text labels to the node using QGraphicsSimpleTextItem for better visibility."""
-        base_size = TREE_CONFIG.get('font_size', 10)
+        """Add text labels with proper scaling and centering."""
+        node_w = TREE_CONFIG['node_width']
+        node_h = TREE_CONFIG['node_height']
+        base_size = TREE_CONFIG.get('font_size', 9)
+        padding = 5
         
-        # Prepare name
+        # Prepare name with truncation
         name = self.person.full_name
-        if len(name) > 22:
-            name = name[:19] + "..."
+        if len(name) > 20:
+            name = name[:17] + "..."
         
-        # Create name text (using QGraphicsSimpleTextItem - more reliable)
+        # Name text
         name_text = QGraphicsSimpleTextItem(name, self)
-        font = QFont(TREE_CONFIG['font_family'], base_size, QFont.Bold)
-        name_text.setFont(font)
+        font_bold = QFont(TREE_CONFIG['font_family'], base_size, QFont.Bold)
+        name_text.setFont(font_bold)
         name_text.setBrush(QBrush(QColor("#000000")))
-        
-        # Center the name
         name_rect = name_text.boundingRect()
-        name_x = (TREE_CONFIG['node_width'] - name_rect.width()) / 2
-        name_text.setPos(name_x, 10)
+        name_x = (node_w - name_rect.width()) / 2
+        name_text.setPos(name_x, padding)
         self.text_items.append(name_text)
         
-        # Create DOB text
+        # DOB text
         dob_str = self.person.dob.strftime('%Y-%m-%d') if self.person.dob else 'DOB: ?'
         dob_text = QGraphicsSimpleTextItem(dob_str, self)
-        font_small = QFont(TREE_CONFIG['font_family'], base_size - 2)
+        font_small = QFont(TREE_CONFIG['font_family'], max(base_size - 1, 7))
         dob_text.setFont(font_small)
-        dob_text.setBrush(QBrush(QColor("#000000")))
-        
-        # Center the DOB
+        dob_text.setBrush(QBrush(QColor("#333333")))
         dob_rect = dob_text.boundingRect()
-        dob_x = (TREE_CONFIG['node_width'] - dob_rect.width()) / 2
-        dob_text.setPos(dob_x, 32)
+        dob_x = (node_w - dob_rect.width()) / 2
+        dob_text.setPos(dob_x, padding + 22)
         self.text_items.append(dob_text)
         
-        # Create ID text
-        id_text = QGraphicsSimpleTextItem(f"ID: {self.person.id}", self)
+        # ID text
+        id_text = QGraphicsSimpleTextItem(f"ID:{self.person.id}", self)
         id_text.setFont(font_small)
-        id_text.setBrush(QBrush(QColor("#555555")))
-        
-        # Center the ID
+        id_text.setBrush(QBrush(QColor("#666666")))
         id_rect = id_text.boundingRect()
-        id_x = (TREE_CONFIG['node_width'] - id_rect.width()) / 2
-        id_text.setPos(id_x, 52)
+        id_x = (node_w - id_rect.width()) / 2
+        id_text.setPos(id_x, padding + 40)
         self.text_items.append(id_text)
         
-        # Ensure text is visible
         for text_item in self.text_items:
             text_item.setVisible(True)
-            text_item.setZValue(1)  # Above the rectangle
-    
-    def paint(self, painter, option, widget=None):
-        """Override paint to ensure proper rendering."""
-        # Call parent paint for the rectangle
-        super().paint(painter, option, widget)
-        
-        # Ensure text items are visible
-        for text_item in self.text_items:
-            if not text_item.isVisible():
-                text_item.setVisible(True)
+            text_item.setZValue(1)
     
     def get_center(self) -> QPointF:
         """Get the center point of the node."""
@@ -151,13 +135,8 @@ class RelationshipLine(QGraphicsPathItem):
         self.end_node = end_node
         self.relation_type = relation_type
         
-        # Set z-value to be below nodes
         self.setZValue(-1)
-        
-        # Setup appearance
         self.setup_appearance()
-        
-        # Update path
         self.update_path()
     
     def setup_appearance(self):
@@ -165,7 +144,7 @@ class RelationshipLine(QGraphicsPathItem):
         if self.relation_type == 'spouse':
             pen = QPen(QColor(TREE_CONFIG['spouse_line_color']), TREE_CONFIG['spouse_line_width'])
             pen.setStyle(Qt.DashLine)
-        else:  # parent relationship
+        else:
             pen = QPen(QColor(TREE_CONFIG['parent_line_color']), TREE_CONFIG['parent_line_width'])
         
         self.setPen(pen)
@@ -173,21 +152,19 @@ class RelationshipLine(QGraphicsPathItem):
     def update_path(self):
         """Update the path based on node positions."""
         if self.relation_type == 'parent':
-            # Parent to child: vertical line with smooth curve
             start = self.start_node.get_bottom_center()
             end = self.end_node.get_top_center()
             
             path = QPainterPath()
             path.moveTo(start)
             
-            # Add control points for smooth bezier curve
+            # Smooth bezier curve
             mid_y = (start.y() + end.y()) / 2
             control1 = QPointF(start.x(), mid_y)
             control2 = QPointF(end.x(), mid_y)
             
             path.cubicTo(control1, control2, end)
-            
-        else:  # spouse: horizontal line
+        else:
             start = self.start_node.get_center()
             end = self.end_node.get_center()
             
@@ -207,31 +184,23 @@ class FamilyTreeView(QGraphicsView):
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
         
-        # Enable ALL rendering hints for best quality
+        # Rendering quality
         self.setRenderHint(QPainter.Antialiasing, True)
         self.setRenderHint(QPainter.TextAntialiasing, True)
         self.setRenderHint(QPainter.SmoothPixmapTransform, True)
-        self.setRenderHint(QPainter.LosslessImageRendering, True)
-        
-        # Viewport update mode for better performance
         self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
         
-        # Enable dragging and scrolling
-        self.setDragMode(QGraphicsView.NoDrag)  # Start with no drag, enable on right-click
+        # Navigation
+        self.setDragMode(QGraphicsView.NoDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
+        self.setBackgroundBrush(QBrush(QColor('#FFFFFF')))
         
-        # Set background
-        self.setBackgroundBrush(QBrush(QColor('#F5F5F5')))
-        
-        # Store nodes and lines
+        # Storage
         self.nodes: Dict[int, PersonNode] = {}
         self.lines: List[RelationshipLine] = []
         
-        # Initial scale
         self._zoom = 1.0
-        
-        # Enable mouse tracking
         self.setMouseTracking(True)
     
     def clear_tree(self):
@@ -248,16 +217,11 @@ class FamilyTreeView(QGraphicsView):
         self.clear_tree()
         
         if not persons:
-            print("Warning: No persons to render")
             return
-        
-        print(f"Rendering tree with {len(persons)} persons and {len(relationships)} relationships")
         
         # Calculate layout
         layout_engine = TreeLayoutEngine()
         positions = layout_engine.calculate_layout(persons, relationships, center_person_id)
-        
-        print(f"Layout calculated: {len(positions)} positions")
         
         # Create nodes
         for person in persons:
@@ -267,73 +231,47 @@ class FamilyTreeView(QGraphicsView):
                 node = PersonNode(person, x, y, is_highlight)
                 self.scene.addItem(node)
                 self.nodes[person.id] = node
-                print(f"Added node for {person.full_name} at ({x}, {y})")
-        
-        print(f"Created {len(self.nodes)} nodes")
         
         # Create relationship lines
         for rel in relationships:
             if rel.person_a_id in self.nodes and rel.person_b_id in self.nodes:
                 start_node = self.nodes[rel.person_a_id]
                 end_node = self.nodes[rel.person_b_id]
-                
                 line = RelationshipLine(start_node, end_node, rel.relation_type)
                 self.scene.addItem(line)
                 self.lines.append(line)
         
-        print(f"Created {len(self.lines)} relationship lines")
-        
-        # Update scene rect and fit view
+        # Set scene bounds with padding
         scene_rect = self.scene.itemsBoundingRect()
-        print(f"Scene bounding rect: {scene_rect}")
-        
-        # Add padding
-        padded_rect = scene_rect.adjusted(-100, -100, 100, 100)
+        padded_rect = scene_rect.adjusted(-120, -120, 120, 120)
         self.scene.setSceneRect(padded_rect)
         
-        # Fit view with some margin
+        # Fit view
         self.fitInView(padded_rect, Qt.KeepAspectRatio)
-        
-        # Force update
         self.scene.update()
-        self.viewport().update()
-        
-        print("Tree rendering complete")
         
     def wheelEvent(self, event):
         """Handle zoom with mouse wheel."""
-        # Zoom factor
         zoom_factor = 1.15
-        
-        # Get the old position
         old_pos = self.mapToScene(event.position().toPoint())
         
-        # Zoom with limits
         if event.angleDelta().y() > 0:
-            # Zoom in (max 5x)
             if self._zoom < 5.0:
                 self.scale(zoom_factor, zoom_factor)
                 self._zoom *= zoom_factor
         else:
-            # Zoom out (min 0.2x)
             if self._zoom > 0.2:
                 self.scale(1 / zoom_factor, 1 / zoom_factor)
                 self._zoom /= zoom_factor
         
-        # Get the new position
         new_pos = self.mapToScene(event.position().toPoint())
-        
-        # Move scene to old position (smooth zoom to cursor)
         delta = new_pos - old_pos
         self.translate(delta.x(), delta.y())
         
     def mousePressEvent(self, event):
         """Handle mouse press events."""
-        # Right-click for panning
         if event.button() == Qt.RightButton:
             self.setDragMode(QGraphicsView.ScrollHandDrag)
-            # Create a fake left-click event for drag to work
-            fake_event = event
         super().mousePressEvent(event)
     
     def mouseReleaseEvent(self, event):
@@ -347,6 +285,6 @@ class FamilyTreeView(QGraphicsView):
         self.resetTransform()
         self._zoom = 1.0
         if self.scene.items():
-            padded_rect = self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100)
+            padded_rect = self.scene.itemsBoundingRect().adjusted(-120, -120, 120, 120)
             self.scene.setSceneRect(padded_rect)
             self.fitInView(padded_rect, Qt.KeepAspectRatio)
