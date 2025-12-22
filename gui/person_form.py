@@ -1,27 +1,34 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QDateEdit, QFormLayout, QComboBox, QTextEdit, QCheckBox, QDialogButtonBox, QMessageBox
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+                             QDateEdit, QFormLayout, QComboBox, QTextEdit, QCheckBox, QDialogButtonBox, 
+                             QMessageBox, QListWidget, QListWidgetItem, QGroupBox)
 from PySide6.QtCore import Qt, QDate
 from models.person import Person
-# from business.validator import Validator
+from models.relationship import Relationship
 from database.db_manager import DatabaseManager
 from datetime import date, datetime
 from sqlalchemy.orm import Session
 
 class PersonFormDialog(QDialog):
-    """Dialog for adding or editing a person."""
+    """Dialog for adding or editing a person with parent selection."""
     
     def __init__(self, parent=None, person: Person = None, session: Session = None):
         super().__init__(parent)
         self.person = person
         self.session = session
         self.is_edit = person is not None
+        self.selected_parents = []
         
         self.setWindowTitle("Edit Person" if self.is_edit else "Add Person")
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(700)
         
         self.setup_ui()
         
         if self.is_edit:
             self.load_person_data()
+        else:
+            # For new persons, load existing parents
+            self.load_parent_list()
     
     def setup_ui(self):
         """Setup the form UI."""
@@ -68,6 +75,22 @@ class PersonFormDialog(QDialog):
         
         layout.addLayout(form)
         
+        # Parent Selection Group
+        parent_group = QGroupBox("Parents (Optional)")
+        parent_layout = QVBoxLayout()
+        
+        parent_label = QLabel("Select parents for this person (0, 1, or 2 parents):")
+        parent_layout.addWidget(parent_label)
+        
+        # Parent list - allow multiple selection
+        self.parent_list = QListWidget()
+        self.parent_list.setSelectionMode(QListWidget.MultiSelection)
+        self.parent_list.setMaximumHeight(150)
+        parent_layout.addWidget(self.parent_list)
+        
+        parent_group.setLayout(parent_layout)
+        layout.addWidget(parent_group)
+        
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept_form)
@@ -79,6 +102,22 @@ class PersonFormDialog(QDialog):
     def toggle_dob(self, state):
         """Toggle DOB input enabled state."""
         self.dob_input.setEnabled(state == Qt.Checked)
+    
+    def load_parent_list(self):
+        """Load list of available people as potential parents."""
+        # Get all persons from database
+        if not self.session:
+            return
+        
+        try:
+            all_persons = self.session.query(Person).all()
+            
+            for person in all_persons:
+                item = QListWidgetItem(f"{person.full_name} (ID: {person.id})")
+                item.setData(Qt.UserRole, person.id)
+                self.parent_list.addItem(item)
+        except Exception as e:
+            print(f"Error loading parent list: {e}")
     
     def load_person_data(self):
         """Load person data into form."""
@@ -104,15 +143,41 @@ class PersonFormDialog(QDialog):
         if self.person.external_ids:
             ext_id_text = '\n'.join([f"{k}={v}" for k, v in self.person.external_ids.items()])
             self.ext_id_input.setPlainText(ext_id_text)
+        
+        # Load existing parents
+        self.load_parent_list()
+        self.select_current_parents()
+    
+    def select_current_parents(self):
+        """Select current parents in the list."""
+        if not self.session:
+            return
+        
+        try:
+            # Get all parent relationships for this person
+            parent_rels = self.session.query(Relationship).filter(
+                Relationship.person_b_id == self.person.id,
+                Relationship.relation_type == 'parent'
+            ).all()
+            
+            parent_ids = {rel.person_a_id for rel in parent_rels}
+            
+            # Select matching items in list
+            for i in range(self.parent_list.count()):
+                item = self.parent_list.item(i)
+                person_id = item.data(Qt.UserRole)
+                if person_id in parent_ids:
+                    item.setSelected(True)
+        except Exception as e:
+            print(f"Error loading current parents: {e}")
     
     def accept_form(self):
         """Validate and accept form."""
         name = self.name_input.text().strip()
         
-        # valid, msg = Validator.validate_person_data(name)
-        # if not valid:
-        #     QMessageBox.warning(self, "Validation Error", msg)
-        #     return
+        if not name:
+            QMessageBox.warning(self, "Validation Error", "Full name is required.")
+            return
         
         # Parse external IDs
         ext_ids = {}
@@ -129,6 +194,19 @@ class PersonFormDialog(QDialog):
             qdate = self.dob_input.date()
             dob = date(qdate.year(), qdate.month(), qdate.day())
         
+        # Get selected parents
+        selected_parent_ids = []
+        for item in self.parent_list.selectedItems():
+            parent_id = item.data(Qt.UserRole)
+            selected_parent_ids.append(parent_id)
+        
+        # Limit to 2 parents
+        if len(selected_parent_ids) > 2:
+            QMessageBox.warning(self, "Validation Error", "A person can have at most 2 parents.")
+            return
+        
+        self.selected_parents = selected_parent_ids
+        
         # Create or update person
         if self.is_edit:
             self.person.full_name = name
@@ -140,6 +218,10 @@ class PersonFormDialog(QDialog):
             self.person.updated_at = datetime.now()
             
             self.session.commit()
+            
+            # Update parent relationships
+            self.update_parent_relationships()
+            
             db_manager = DatabaseManager()
             db_manager.log_action(self.session, 'edit_person', f"Edited person ID {self.person.id}")
         else:
@@ -153,10 +235,63 @@ class PersonFormDialog(QDialog):
             )
             self.session.add(self.person)
             self.session.commit()
+            
+            # Add parent relationships
+            self.create_parent_relationships()
+            
             db_manager = DatabaseManager()
             db_manager.log_action(self.session, 'create_person', f"Created person ID {self.person.id}")
         
         self.accept()
+    
+    def create_parent_relationships(self):
+        """Create parent relationships for newly created person."""
+        for parent_id in self.selected_parents:
+            try:
+                relationship = Relationship(
+                    person_a_id=parent_id,
+                    person_b_id=self.person.id,
+                    relation_type='parent'
+                )
+                self.session.add(relationship)
+            except Exception as e:
+                print(f"Error creating relationship: {e}")
+        
+        self.session.commit()
+    
+    def update_parent_relationships(self):
+        """Update parent relationships for edited person."""
+        if not self.session:
+            return
+        
+        try:
+            # Get existing parent relationships
+            existing_rels = self.session.query(Relationship).filter(
+                Relationship.person_b_id == self.person.id,
+                Relationship.relation_type == 'parent'
+            ).all()
+            
+            existing_parent_ids = {rel.person_a_id for rel in existing_rels}
+            new_parent_ids = set(self.selected_parents)
+            
+            # Remove parents that are no longer selected
+            for rel in existing_rels:
+                if rel.person_a_id not in new_parent_ids:
+                    self.session.delete(rel)
+            
+            # Add new parents
+            for parent_id in new_parent_ids:
+                if parent_id not in existing_parent_ids:
+                    relationship = Relationship(
+                        person_a_id=parent_id,
+                        person_b_id=self.person.id,
+                        relation_type='parent'
+                    )
+                    self.session.add(relationship)
+            
+            self.session.commit()
+        except Exception as e:
+            print(f"Error updating relationships: {e}")
     
     def get_person(self) -> Person:
         """Get the created/edited person."""
