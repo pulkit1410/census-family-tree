@@ -1,5 +1,5 @@
 """
-Interactive family tree visualization using PyQt.
+Interactive family tree visualization using PyQt with dynamic graph updates.
 """
 from typing import Dict, List, Set, Tuple, Optional
 from PySide6.QtWidgets import (
@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
     QGraphicsSimpleTextItem
 )
-from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtCore import Qt, QPointF, QRectF, QVariant
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter, QPainterPath, QFont
 
 from config import TREE_CONFIG
@@ -24,6 +24,7 @@ class PersonNode(QGraphicsRectItem):
         self.person = person
         self.is_highlight = is_highlight
         self.text_items = []
+        self.connected_lines = []
         
         # Position
         self.setPos(x, y)
@@ -100,6 +101,21 @@ class PersonNode(QGraphicsRectItem):
             text_item.setVisible(True)
             text_item.setZValue(1)
     
+    def itemChange(self, change, value):
+        """Handle item changes (position updates trigger line redraws)."""
+        # When position changes, update all connected lines
+        if change == QGraphicsItem.ItemPositionChange or change == QGraphicsItem.ItemPositionHasChanged:
+            # Update all connected relationship lines
+            for line in self.connected_lines:
+                line.update_path()
+        
+        return super().itemChange(change, value)
+    
+    def add_connected_line(self, line):
+        """Register a relationship line connected to this node."""
+        if line not in self.connected_lines:
+            self.connected_lines.append(line)
+    
     def get_center(self) -> QPointF:
         """Get the center point of the node."""
         return self.sceneBoundingRect().center()
@@ -136,6 +152,11 @@ class RelationshipLine(QGraphicsPathItem):
         self.relation_type = relation_type
         
         self.setZValue(-1)
+        
+        # Register this line with both nodes
+        start_node.add_connected_line(self)
+        end_node.add_connected_line(self)
+        
         self.setup_appearance()
         self.update_path()
     

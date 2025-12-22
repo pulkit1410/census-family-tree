@@ -16,10 +16,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Family Tree Desktop App"
+args = "Family Tree App"
 
 [[workflows.workflow]]
-name = "Family Tree Desktop App"
+name = "Family Tree App"
 author = "agent"
 
 [[workflows.workflow.tasks]]
@@ -27,4 +27,4 @@ task = "shell.exec"
 args = "python main.py"
 
 [workflows.workflow.metadata]
-outputType = "vnc"
+outputType = "console"
