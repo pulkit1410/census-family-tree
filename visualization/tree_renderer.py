@@ -1,13 +1,10 @@
 """
 Interactive family tree visualization using PyQt with dynamic graph updates.
 """
-from typing import Dict, List, Set, Tuple, Optional
-from PySide6.QtWidgets import (
-    QGraphicsView, QGraphicsScene, QGraphicsItem, 
-    QGraphicsRectItem, QGraphicsPathItem,
-    QGraphicsSimpleTextItem
-)
-from PySide6.QtCore import Qt, QPointF, QRectF
+from typing import Dict, List, Optional
+from collections import defaultdict
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsItem, QGraphicsRectItem, QGraphicsPathItem, QGraphicsSimpleTextItem
+from PySide6.QtCore import Qt, QPointF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter, QPainterPath, QFont
 
 from config import TREE_CONFIG
@@ -26,18 +23,12 @@ class PersonNode(QGraphicsRectItem):
         self.text_items = []
         self.connected_lines = []
         
-        # Position
         self.setPos(x, y)
-        
-        # Make draggable
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
         
-        # Styling
         self.setup_appearance()
-        
-        # Add text
         self.add_labels()
         
     def setup_appearance(self):
@@ -56,18 +47,16 @@ class PersonNode(QGraphicsRectItem):
         self.setPen(pen)
     
     def add_labels(self):
-        """Add text labels with proper scaling and centering."""
+        """Add text labels with proper positioning."""
         node_w = TREE_CONFIG['node_width']
         node_h = TREE_CONFIG['node_height']
         base_size = TREE_CONFIG.get('font_size', 9)
         padding = 5
         
-        # Prepare name with truncation
         name = self.person.full_name
         if len(name) > 20:
             name = name[:17] + "..."
         
-        # Name text
         name_text = QGraphicsSimpleTextItem(name, self)
         font_bold = QFont(TREE_CONFIG['font_family'], base_size, QFont.Bold)
         name_text.setFont(font_bold)
@@ -77,7 +66,6 @@ class PersonNode(QGraphicsRectItem):
         name_text.setPos(name_x, padding)
         self.text_items.append(name_text)
         
-        # DOB text
         dob_str = self.person.dob.strftime('%Y-%m-%d') if self.person.dob else 'DOB: ?'
         dob_text = QGraphicsSimpleTextItem(dob_str, self)
         font_small = QFont(TREE_CONFIG['font_family'], max(base_size - 1, 7))
@@ -88,7 +76,6 @@ class PersonNode(QGraphicsRectItem):
         dob_text.setPos(dob_x, padding + 22)
         self.text_items.append(dob_text)
         
-        # ID text
         id_text = QGraphicsSimpleTextItem(f"ID:{self.person.id}", self)
         id_text.setFont(font_small)
         id_text.setBrush(QBrush(QColor("#666666")))
@@ -96,21 +83,16 @@ class PersonNode(QGraphicsRectItem):
         id_x = (node_w - id_rect.width()) / 2
         id_text.setPos(id_x, padding + 40)
         self.text_items.append(id_text)
-        
-        for text_item in self.text_items:
-            text_item.setVisible(True)
-            text_item.setZValue(1)
     
     def itemChange(self, change, value):
-        """Handle item changes (position updates trigger line redraws)."""
+        """Update all connected lines when node moves."""
         if change == QGraphicsItem.ItemPositionChange or change == QGraphicsItem.ItemPositionHasChanged:
             for line in self.connected_lines:
                 line.update_path()
-        
         return super().itemChange(change, value)
     
-    def add_connected_line(self, line):
-        """Register a relationship line connected to this node."""
+    def register_line(self, line):
+        """Register a line connected to this node."""
         if line not in self.connected_lines:
             self.connected_lines.append(line)
     
@@ -129,127 +111,127 @@ class PersonNode(QGraphicsRectItem):
         return QPointF(rect.center().x(), rect.bottom())
 
 
-class SpouseLine(QGraphicsPathItem):
-    """Horizontal line connecting two spouses."""
+class FamilyLine(QGraphicsPathItem):
+    """
+    A single unified line system handling:
+    - Spouse connections (horizontal lines)
+    - Parent-child connections (curved lines)
+    - Family trunks with branches (for couples with multiple children)
+    """
     
-    def __init__(self, node1: PersonNode, node2: PersonNode):
+    def __init__(self, connected_nodes: List[PersonNode], line_type: str):
         super().__init__()
-        
-        self.node1 = node1
-        self.node2 = node2
+        self.connected_nodes = connected_nodes
+        self.line_type = line_type  # 'spouse', 'parent_trunk', 'single_parent'
         
         self.setZValue(-1)
+        self.setup_appearance()
         
-        node1.add_connected_line(self)
-        node2.add_connected_line(self)
-        
-        pen = QPen(QColor(TREE_CONFIG['spouse_line_color']), TREE_CONFIG['spouse_line_width'])
-        self.setPen(pen)
+        # Register this line with all connected nodes
+        for node in connected_nodes:
+            node.register_line(self)
         
         self.update_path()
     
-    def update_path(self):
-        """Update the horizontal line between spouses."""
-        center1 = self.node1.get_center()
-        center2 = self.node2.get_center()
+    def setup_appearance(self):
+        """Setup line appearance based on type."""
+        if self.line_type == 'spouse':
+            pen = QPen(QColor(TREE_CONFIG['spouse_line_color']), TREE_CONFIG['spouse_line_width'])
+            pen.setStyle(Qt.DashLine)
+        else:  # parent_trunk or single_parent
+            pen = QPen(QColor(TREE_CONFIG['parent_line_color']), TREE_CONFIG['parent_line_width'])
         
+        self.setPen(pen)
+    
+    def update_path(self):
+        """Update the path based on current node positions."""
         path = QPainterPath()
-        path.moveTo(center1)
-        path.lineTo(center2)
+        
+        if self.line_type == 'spouse':
+            self._update_spouse_line(path)
+        elif self.line_type == 'single_parent':
+            self._update_single_parent_line(path)
+        elif self.line_type == 'parent_trunk':
+            self._update_parent_trunk_line(path)
         
         self.setPath(path)
     
-    def get_midpoint(self) -> QPointF:
-        """Get the midpoint of the spouse line."""
-        center1 = self.node1.get_center()
-        center2 = self.node2.get_center()
-        return QPointF((center1.x() + center2.x()) / 2, (center1.y() + center2.y()) / 2)
-
-
-class FamilyTrunk(QGraphicsPathItem):
-    """Vertical trunk line from spouse couple to children with child branches."""
-    
-    def __init__(self, spouse_line: SpouseLine, children_nodes: List[PersonNode]):
-        super().__init__()
-        
-        self.spouse_line = spouse_line
-        self.children_nodes = children_nodes
-        
-        self.setZValue(-1)
-        
-        pen = QPen(QColor(TREE_CONFIG['parent_line_color']), TREE_CONFIG['parent_line_width'])
-        self.setPen(pen)
-        
-        self.update_path()
-    
-    def update_path(self):
-        """Update trunk and child branches."""
-        if not self.children_nodes:
+    def _update_spouse_line(self, path: QPainterPath):
+        """Draw horizontal line between two spouses."""
+        if len(self.connected_nodes) < 2:
             return
         
-        midpoint = self.spouse_line.get_midpoint()
-        path = QPainterPath()
+        node1, node2 = self.connected_nodes[0], self.connected_nodes[1]
+        center1 = node1.get_center()
+        center2 = node2.get_center()
         
-        # Start from midpoint of spouse line
-        path.moveTo(midpoint)
-        
-        # Find lowest child to draw trunk down to
-        min_child_y = min(child.get_top_center().y() for child in self.children_nodes)
-        
-        # Vertical trunk line down
-        trunk_bottom = QPointF(midpoint.x(), min_child_y)
-        path.lineTo(trunk_bottom)
-        
-        # Horizontal branches to each child
-        for child in self.children_nodes:
-            child_top = child.get_top_center()
-            
-            # Horizontal line from trunk to child
-            path.moveTo(trunk_bottom.x(), trunk_bottom.y())
-            path.lineTo(child_top.x(), trunk_bottom.y())
-            
-            # Vertical line from horizontal branch to child
-            path.moveTo(child_top.x(), trunk_bottom.y())
-            path.lineTo(child_top)
-        
-        self.setPath(path)
-
-
-class SingleParentLine(QGraphicsPathItem):
-    """Line from single parent to child."""
+        path.moveTo(center1)
+        path.lineTo(center2)
     
-    def __init__(self, parent_node: PersonNode, child_node: PersonNode):
-        super().__init__()
+    def _update_single_parent_line(self, path: QPainterPath):
+        """Draw curved line from single parent to child."""
+        if len(self.connected_nodes) < 2:
+            return
         
-        self.parent_node = parent_node
-        self.child_node = child_node
+        parent_node = self.connected_nodes[0]
+        child_node = self.connected_nodes[1]
         
-        self.setZValue(-1)
+        start = parent_node.get_bottom_center()
+        end = child_node.get_top_center()
         
-        parent_node.add_connected_line(self)
-        child_node.add_connected_line(self)
-        
-        pen = QPen(QColor(TREE_CONFIG['parent_line_color']), TREE_CONFIG['parent_line_width'])
-        self.setPen(pen)
-        
-        self.update_path()
-    
-    def update_path(self):
-        """Update the line from parent to child."""
-        start = self.parent_node.get_bottom_center()
-        end = self.child_node.get_top_center()
-        
-        path = QPainterPath()
         path.moveTo(start)
-        
-        # Smooth bezier curve
         mid_y = (start.y() + end.y()) / 2
         control1 = QPointF(start.x(), mid_y)
         control2 = QPointF(end.x(), mid_y)
-        
         path.cubicTo(control1, control2, end)
+    
+    def _update_parent_trunk_line(self, path: QPainterPath):
+        """
+        Draw family trunk with branches.
+        connected_nodes[0:2] = parents
+        connected_nodes[2:] = children
+        """
+        if len(self.connected_nodes) < 3:
+            return
         
-        self.setPath(path)
+        parent1 = self.connected_nodes[0]
+        parent2 = self.connected_nodes[1]
+        children = self.connected_nodes[2:]
+        
+        # Midpoint between parents
+        parent1_center = parent1.get_center()
+        parent2_center = parent2.get_center()
+        midpoint = QPointF(
+            (parent1_center.x() + parent2_center.x()) / 2,
+            (parent1_center.y() + parent2_center.y()) / 2
+        )
+        
+        # Trunk endpoint (top of lowest child)
+        min_child_y = min(child.get_top_center().y() for child in children)
+        trunk_bottom = QPointF(midpoint.x(), min_child_y)
+        
+        # Draw vertical trunk
+        path.moveTo(midpoint)
+        path.lineTo(trunk_bottom)
+        
+        # Draw branches to each child
+        for child in children:
+            child_top = child.get_top_center()
+            
+            # Horizontal branch
+            path.moveTo(trunk_bottom)
+            path.lineTo(QPointF(child_top.x(), trunk_bottom.y()))
+            
+            # Vertical drop to child
+            path.lineTo(child_top)
+    
+    def get_spouse_midpoint(self) -> Optional[QPointF]:
+        """Get midpoint of spouse line (used for trunk attachment)."""
+        if self.line_type == 'spouse' and len(self.connected_nodes) >= 2:
+            center1 = self.connected_nodes[0].get_center()
+            center2 = self.connected_nodes[1].get_center()
+            return QPointF((center1.x() + center2.x()) / 2, (center1.y() + center2.y()) / 2)
+        return None
 
 
 class FamilyTreeView(QGraphicsView):
@@ -261,21 +243,18 @@ class FamilyTreeView(QGraphicsView):
         self.scene = QGraphicsScene(self)
         self.setScene(self.scene)
         
-        # Rendering quality
         self.setRenderHint(QPainter.Antialiasing, True)
         self.setRenderHint(QPainter.TextAntialiasing, True)
         self.setRenderHint(QPainter.SmoothPixmapTransform, True)
         self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
         
-        # Navigation
         self.setDragMode(QGraphicsView.NoDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorViewCenter)
         self.setBackgroundBrush(QBrush(QColor('#FFFFFF')))
         
-        # Storage
         self.nodes: Dict[int, PersonNode] = {}
-        self.lines: List = []
+        self.lines: List[FamilyLine] = []
         
         self._zoom = 1.0
         self.setMouseTracking(True)
@@ -288,11 +267,10 @@ class FamilyTreeView(QGraphicsView):
     
     def render_tree(self, persons: List[Person], relationships: List[Relationship], 
                     center_person_id: Optional[int] = None):
-        """Render a family tree with proper family trunk connections."""
+        """Render family tree with dynamic trunk visualization."""
         from visualization.graph_layout import TreeLayoutEngine
         
         self.clear_tree()
-        
         if not persons:
             return
         
@@ -309,73 +287,66 @@ class FamilyTreeView(QGraphicsView):
                 self.scene.addItem(node)
                 self.nodes[person.id] = node
         
-        # Build graph structure for relationship handling
+        # Build graph
         graph = self._build_graph(relationships)
         
-        # Handle relationships
+        # Track which relationships we've already drawn
         processed_couples = set()
         processed_children = set()
         
-        # Create spouse lines and family trunks
+        # Draw spouse lines and family trunks
         for rel in relationships:
             if rel.relation_type == 'spouse':
                 couple_key = tuple(sorted([rel.person_a_id, rel.person_b_id]))
                 
-                if couple_key not in processed_couples:
+                if couple_key not in processed_couples and couple_key[0] in self.nodes and couple_key[1] in self.nodes:
                     parent1_id, parent2_id = couple_key
+                    parent1_node = self.nodes[parent1_id]
+                    parent2_node = self.nodes[parent2_id]
                     
-                    if parent1_id in self.nodes and parent2_id in self.nodes:
-                        parent1_node = self.nodes[parent1_id]
-                        parent2_node = self.nodes[parent2_id]
-                        
-                        # Create spouse line
-                        spouse_line = SpouseLine(parent1_node, parent2_node)
+                    # Find children of this couple
+                    children_ids = graph[parent1_id]['children'] & graph[parent2_id]['children']
+                    children_nodes = [self.nodes[cid] for cid in children_ids if cid in self.nodes]
+                    
+                    if children_nodes:
+                        # Draw trunk with children
+                        all_nodes = [parent1_node, parent2_node] + children_nodes
+                        trunk_line = FamilyLine(all_nodes, 'parent_trunk')
+                        self.scene.addItem(trunk_line)
+                        self.lines.append(trunk_line)
+                        processed_children.update(children_ids)
+                    else:
+                        # Just draw spouse line (no children)
+                        spouse_line = FamilyLine([parent1_node, parent2_node], 'spouse')
                         self.scene.addItem(spouse_line)
                         self.lines.append(spouse_line)
-                        
-                        # Find all children of this couple
-                        children_ids = (graph[parent1_id]['children'] & graph[parent2_id]['children'])
-                        children_nodes = [self.nodes[cid] for cid in children_ids if cid in self.nodes]
-                        
-                        if children_nodes:
-                            # Create family trunk with branches
-                            trunk = FamilyTrunk(spouse_line, children_nodes)
-                            self.scene.addItem(trunk)
-                            self.lines.append(trunk)
-                            
-                            processed_children.update(children_ids)
-                        
-                        processed_couples.add(couple_key)
+                    
+                    processed_couples.add(couple_key)
         
-        # Create single parent lines for children without both parents
+        # Draw single parent lines for remaining children
         for rel in relationships:
-            if rel.relation_type == 'parent':
+            if rel.relation_type == 'parent' and rel.person_b_id not in processed_children:
+                parent_id = rel.person_a_id
                 child_id = rel.person_b_id
                 
-                # Only create single parent line if child not already handled by family trunk
-                if child_id not in processed_children:
-                    if rel.person_a_id in self.nodes and child_id in self.nodes:
-                        parent_node = self.nodes[rel.person_a_id]
-                        child_node = self.nodes[child_id]
-                        
-                        line = SingleParentLine(parent_node, child_node)
-                        self.scene.addItem(line)
-                        self.lines.append(line)
+                if parent_id in self.nodes and child_id in self.nodes:
+                    parent_node = self.nodes[parent_id]
+                    child_node = self.nodes[child_id]
+                    
+                    line = FamilyLine([parent_node, child_node], 'single_parent')
+                    self.scene.addItem(line)
+                    self.lines.append(line)
         
-        # Set scene bounds with padding
+        # Fit scene
         if self.scene.items():
             scene_rect = self.scene.itemsBoundingRect()
             padded_rect = scene_rect.adjusted(-120, -120, 120, 120)
             self.scene.setSceneRect(padded_rect)
-            
-            # Fit view
             self.fitInView(padded_rect, Qt.KeepAspectRatio)
             self.scene.update()
     
-    def _build_graph(self, relationships: List[Relationship]) -> Dict[int, Dict[str, Set[int]]]:
+    def _build_graph(self, relationships: List[Relationship]) -> Dict:
         """Build graph structure from relationships."""
-        from collections import defaultdict
-        
         graph = defaultdict(lambda: {'parents': set(), 'children': set(), 'spouses': set()})
         
         for rel in relationships:
@@ -405,7 +376,7 @@ class FamilyTreeView(QGraphicsView):
         new_pos = self.mapToScene(event.position().toPoint())
         delta = new_pos - old_pos
         self.translate(delta.x(), delta.y())
-        
+    
     def mousePressEvent(self, event):
         """Handle mouse press events."""
         if event.button() == Qt.RightButton:
