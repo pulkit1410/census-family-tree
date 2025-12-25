@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
     QGraphicsSimpleTextItem
 )
-from PySide6.QtCore import Qt, QPointF, QRectF, QVariant
+from PySide6.QtCore import Qt, QPointF
 from PySide6.QtGui import QPen, QBrush, QColor, QPainter, QPainterPath, QFont
 
 from config import TREE_CONFIG
