@@ -187,10 +187,10 @@ class FamilyLine(QGraphicsPathItem):
     
     def _update_parent_trunk_line(self, path: QPainterPath):
         """
-        Draw family trunk with branches.
+        Draw family trunk with branches (ONLY trunk and child connections, not spouse line).
         connected_nodes[0:2] = parents
         connected_nodes[2:] = children
-        Draws: spouse line + vertical trunk + horizontal branch line + vertical connections to children
+        Draws: vertical trunk + horizontal branch line + vertical connections to children
         """
         if len(self.connected_nodes) < 3:
             return
@@ -203,23 +203,20 @@ class FamilyLine(QGraphicsPathItem):
         parent1_center = parent1.get_center()
         parent2_center = parent2.get_center()
         
-        # Draw HORIZONTAL SPOUSE LINE first
-        path.moveTo(parent1_center)
-        path.lineTo(parent2_center)
-        
         # Midpoint between parents
         midpoint = QPointF(
             (parent1_center.x() + parent2_center.x()) / 2,
             (parent1_center.y() + parent2_center.y()) / 2
         )
         
-        # Horizontal branch line (between first and last child x positions)
+        # Get child positions
         child_tops = [child.get_top_center() for child in children]
         leftmost_child_x = min(pos.x() for pos in child_tops)
         rightmost_child_x = max(pos.x() for pos in child_tops)
-        horizontal_line_y = min(pos.y() for pos in child_tops)
+        # Horizontal line should be slightly above children
+        horizontal_line_y = child_tops[0].y() - 30
         
-        # Draw VERTICAL TRUNK from midpoint to horizontal line
+        # Draw VERTICAL TRUNK from midpoint down to horizontal branch line
         path.moveTo(midpoint)
         path.lineTo(QPointF(midpoint.x(), horizontal_line_y))
         
@@ -317,18 +314,18 @@ class FamilyTreeView(QGraphicsView):
                     children_ids = graph[parent1_id]['children'] & graph[parent2_id]['children']
                     children_nodes = [self.nodes[cid] for cid in children_ids if cid in self.nodes]
                     
+                    # Always draw spouse line (dotted red)
+                    spouse_line = FamilyLine([parent1_node, parent2_node], 'spouse')
+                    self.scene.addItem(spouse_line)
+                    self.lines.append(spouse_line)
+                    
                     if children_nodes:
-                        # Draw trunk with children
+                        # Draw trunk with children (separate line)
                         all_nodes = [parent1_node, parent2_node] + children_nodes
                         trunk_line = FamilyLine(all_nodes, 'parent_trunk')
                         self.scene.addItem(trunk_line)
                         self.lines.append(trunk_line)
                         processed_children.update(children_ids)
-                    else:
-                        # Just draw spouse line (no children)
-                        spouse_line = FamilyLine([parent1_node, parent2_node], 'spouse')
-                        self.scene.addItem(spouse_line)
-                        self.lines.append(spouse_line)
                     
                     processed_couples.add(couple_key)
         
