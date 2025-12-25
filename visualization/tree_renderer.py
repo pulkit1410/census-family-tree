@@ -190,7 +190,7 @@ class FamilyLine(QGraphicsPathItem):
         Draw family trunk with branches.
         connected_nodes[0:2] = parents
         connected_nodes[2:] = children
-        Draws: spouse line + vertical trunk + small vertical drop + child branches
+        Draws: spouse line + vertical trunk + horizontal branch line + vertical connections to children
         """
         if len(self.connected_nodes) < 3:
             return
@@ -213,30 +213,26 @@ class FamilyLine(QGraphicsPathItem):
             (parent1_center.y() + parent2_center.y()) / 2
         )
         
-        # Trunk endpoint (top of lowest child)
-        min_child_y = min(child.get_top_center().y() for child in children)
-        trunk_bottom = QPointF(midpoint.x(), min_child_y)
+        # Horizontal branch line (between first and last child x positions)
+        child_tops = [child.get_top_center() for child in children]
+        leftmost_child_x = min(pos.x() for pos in child_tops)
+        rightmost_child_x = max(pos.x() for pos in child_tops)
+        horizontal_line_y = min(pos.y() for pos in child_tops)
         
-        # Draw VERTICAL TRUNK from midpoint
+        # Draw VERTICAL TRUNK from midpoint to horizontal line
         path.moveTo(midpoint)
-        path.lineTo(trunk_bottom)
+        path.lineTo(QPointF(midpoint.x(), horizontal_line_y))
         
-        # Small vertical drop from trunk (for better visualization)
-        drop_distance = 20  # Small vertical drop before branches spread
-        branch_origin = QPointF(trunk_bottom.x(), trunk_bottom.y() + drop_distance)
-        path.moveTo(trunk_bottom)
-        path.lineTo(branch_origin)
+        # Draw HORIZONTAL BRANCH LINE connecting all children
+        path.moveTo(QPointF(leftmost_child_x, horizontal_line_y))
+        path.lineTo(QPointF(rightmost_child_x, horizontal_line_y))
         
-        # Draw BRANCHES to each child
+        # Draw VERTICAL LINES from each child UP to horizontal line
         for child in children:
             child_top = child.get_top_center()
-            
-            # Horizontal branch from drop point to child
-            path.moveTo(branch_origin)
-            path.lineTo(QPointF(child_top.x(), branch_origin.y()))
-            
-            # Vertical drop to child top
-            path.lineTo(child_top)
+            # Vertical line from child top up to horizontal branch line
+            path.moveTo(child_top)
+            path.lineTo(QPointF(child_top.x(), horizontal_line_y))
     
     def get_spouse_midpoint(self) -> Optional[QPointF]:
         """Get midpoint of spouse line (used for trunk attachment)."""
