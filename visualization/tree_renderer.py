@@ -190,6 +190,7 @@ class FamilyLine(QGraphicsPathItem):
         Draw family trunk with branches.
         connected_nodes[0:2] = parents
         connected_nodes[2:] = children
+        Draws: spouse line + vertical trunk + child branches
         """
         if len(self.connected_nodes) < 3:
             return
@@ -198,9 +199,15 @@ class FamilyLine(QGraphicsPathItem):
         parent2 = self.connected_nodes[1]
         children = self.connected_nodes[2:]
         
-        # Midpoint between parents
+        # Get parent centers
         parent1_center = parent1.get_center()
         parent2_center = parent2.get_center()
+        
+        # Draw HORIZONTAL SPOUSE LINE first
+        path.moveTo(parent1_center)
+        path.lineTo(parent2_center)
+        
+        # Midpoint between parents
         midpoint = QPointF(
             (parent1_center.x() + parent2_center.x()) / 2,
             (parent1_center.y() + parent2_center.y()) / 2
@@ -210,19 +217,19 @@ class FamilyLine(QGraphicsPathItem):
         min_child_y = min(child.get_top_center().y() for child in children)
         trunk_bottom = QPointF(midpoint.x(), min_child_y)
         
-        # Draw vertical trunk
+        # Draw VERTICAL TRUNK from midpoint
         path.moveTo(midpoint)
         path.lineTo(trunk_bottom)
         
-        # Draw branches to each child
+        # Draw BRANCHES to each child
         for child in children:
             child_top = child.get_top_center()
             
-            # Horizontal branch
+            # Horizontal branch from trunk to child
             path.moveTo(trunk_bottom)
             path.lineTo(QPointF(child_top.x(), trunk_bottom.y()))
             
-            # Vertical drop to child
+            # Vertical drop to child top
             path.lineTo(child_top)
     
     def get_spouse_midpoint(self) -> Optional[QPointF]:
