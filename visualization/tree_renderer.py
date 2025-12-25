@@ -190,7 +190,7 @@ class FamilyLine(QGraphicsPathItem):
         Draw family trunk with branches.
         connected_nodes[0:2] = parents
         connected_nodes[2:] = children
-        Draws: spouse line + vertical trunk + child branches
+        Draws: spouse line + vertical trunk + small vertical drop + child branches
         """
         if len(self.connected_nodes) < 3:
             return
@@ -221,13 +221,19 @@ class FamilyLine(QGraphicsPathItem):
         path.moveTo(midpoint)
         path.lineTo(trunk_bottom)
         
+        # Small vertical drop from trunk (for better visualization)
+        drop_distance = 20  # Small vertical drop before branches spread
+        branch_origin = QPointF(trunk_bottom.x(), trunk_bottom.y() + drop_distance)
+        path.moveTo(trunk_bottom)
+        path.lineTo(branch_origin)
+        
         # Draw BRANCHES to each child
         for child in children:
             child_top = child.get_top_center()
             
-            # Horizontal branch from trunk to child
-            path.moveTo(trunk_bottom)
-            path.lineTo(QPointF(child_top.x(), trunk_bottom.y()))
+            # Horizontal branch from drop point to child
+            path.moveTo(branch_origin)
+            path.lineTo(QPointF(child_top.x(), branch_origin.y()))
             
             # Vertical drop to child top
             path.lineTo(child_top)
